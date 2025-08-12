@@ -1,0 +1,124 @@
+name: Generate Game of Life SVG
+
+on:
+  workflow_dispatch:
+    inputs:
+      username:
+        description: "GitHub username to use for contributions graph (defaults to repo owner)"
+        required: false
+        default: ""
+      steps:
+        description: "Number of simulation steps"
+        required: false
+        default: "120"
+      frame_duration:
+        description: "Seconds per frame"
+        required: false
+        default: "0.08"
+      target_repo:
+        description: "Optional owner/repo to publish output branch to (default: this repo)"
+        required: false
+        default: ""
+  schedule:
+    - cron: '17 2 * * *'  # daily
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Determine username
+        id: who
+        run: |
+          if [ -n "${{ github.event.inputs.username }}" ]; then
+            echo "user=${{ github.event.inputs.username }}" >> $GITHUB_OUTPUT
+          else
+            echo "user=${{ github.repository_owner }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate animated SVGs (light and dark)
+        run: |
+          mkdir -p dist
+          # Light theme
+          python scripts/generate_svg.py \
+            --username "${{ steps.who.outputs.user }}" \
+            --steps "${{ github.event.inputs.steps || '120' }}" \
+            --frame-duration "${{ github.event.inputs.frame_duration || '0.08' }}" \
+            --alive-color "#2ea043" --dead-color "#ebedf0" \
+            --out dist/game-of-live-contribution-graph.svg
+          # Dark theme
+          python scripts/generate_svg.py \
+            --username "${{ steps.who.outputs.user }}" \
+            --steps "${{ github.event.inputs.steps || '120' }}" \
+            --frame-duration "${{ github.event.inputs.frame_duration || '0.08' }}" \
+            --alive-color "#39d353" --dead-color "#161b22" \
+            --out dist/game-of-live-contribution-graph-dark.svg
+
+      - name: Validate SVGs
+        run: |
+          python scripts/validate_svg.py dist/game-of-live-contribution-graph.svg
+          python scripts/validate_svg.py dist/game-of-live-contribution-graph-dark.svg
+
+      - name: Publish to output branch
+        env:
+          DEFAULT_REPO: ${{ github.repository }}
+          INPUT_REPO: ${{ github.event.inputs.target_repo }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+        run: |
+          set -euo pipefail
+          TARGET_REPO="${INPUT_REPO:-$DEFAULT_REPO}"
+          echo "Publishing to $TARGET_REPO branch 'output'"
+          mkdir -p publish
+          cp dist/game-of-live-contribution-graph*.svg publish/
+          cd publish
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Choose appropriate token: if pushing to another repo, require PUBLISH_TOKEN
+          if [ "$TARGET_REPO" != "$DEFAULT_REPO" ]; then
+            if [ -z "${PUBLISH_TOKEN}" ]; then
+              echo "ERROR: target_repo differs from current repo but secrets.PUBLISH_TOKEN is not set" >&2
+              exit 1
+            fi
+            AUTH_TOKEN="$PUBLISH_TOKEN"
+          else
+            AUTH_TOKEN="$GITHUB_TOKEN"
+          fi
+          git remote add origin "https://x-access-token:${AUTH_TOKEN}@github.com/${TARGET_REPO}.git"
+          # Fetch output branch if it exists
+          if git ls-remote --exit-code --heads origin output >/dev/null 2>&1; then
+            git fetch origin output:output
+            git checkout output
+            # Clean existing files
+            ls -A | grep -v ".git" | xargs -r rm -rf
+          else
+            git checkout --orphan output
+          fi
+          cp ../dist/game-of-live-contribution-graph*.svg ./
+          git add *.svg || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: update Game of Life contribution SVGs"
+            git push -u origin output
+          fi
+

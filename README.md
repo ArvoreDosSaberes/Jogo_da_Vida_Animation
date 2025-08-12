@@ -23,3 +23,9 @@ python scripts/generate_svg.py --username <github_username> --steps 120 --frame-
 - This script scrapes the public contributions SVG at `https://github.com/users/<username>/contributions`.
 - No API token required. Respect GitHub rate limits.
 - The animated SVG uses SMIL. GitHub README rendering supports this style of SVG animation.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/carlosdelfino/carlosdelfino/output/game-of-live-contribution-graph-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/carlosdelfino/carlosdelfino/output/game-of-live-contribution-graph.svg">
+  <img alt="pacman contribution graph" src="https://raw.githubusercontent.com/carlosdelfino/carlosdelfino/output/game-of-live-contribution-graph.svg">
+</picture>
