@@ -4,23 +4,57 @@ import math
 import os
 import sys
 from typing import List, Tuple
+import datetime
+import time
 
 import requests
 from bs4 import BeautifulSoup
 
 
 def fetch_contributions_matrix(username: str) -> List[List[int]]:
-    url = f"https://github.com/users/{username}/contributions"
+    base = f"https://github.com/users/{username}/contributions"
+    today = datetime.date.today().isoformat()
+    candidates = [
+        base,
+        f"{base}?to={today}",
+    ]
     headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; GameOfLifeSVG/1.0)"
+        # Use a modern browser UA to avoid lightweight bot heuristics
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
     }
-    r = requests.get(url, headers=headers, timeout=15)
-    r.raise_for_status()
-
-    soup = BeautifulSoup(r.text, "html.parser")
-    svg = soup.find("svg")
+    last_text = ""
+    svg = None
+    for url in candidates:
+        for attempt in range(3):
+            r = requests.get(url, headers=headers, timeout=20)
+            # Retry on 429/503 transient
+            if r.status_code in (429, 503):
+                time.sleep(1 + attempt)
+                continue
+            r.raise_for_status()
+            text = r.text or ""
+            last_text = text
+            soup = BeautifulSoup(text, "html.parser")
+            # Try multiple selectors
+            svg = (
+                soup.find("svg")
+                or soup.select_one("svg.js-calendar-graph-svg")
+                or soup.select_one(".js-yearly-contributions svg")
+            )
+            if svg is not None:
+                break
+            time.sleep(0.5)
+        if svg is not None:
+            break
     if svg is None:
-        raise RuntimeError("Could not find contributions SVG in response")
+        snippet = (last_text or "")[:500].replace("\n", " ")
+        raise RuntimeError(f"Could not find contributions SVG in response (first 500 chars): {snippet}")
 
     # GitHub groups weeks in <g> with translate(x, 0). Each has up to 7 rects (days)
     weeks = svg.find_all("g")
