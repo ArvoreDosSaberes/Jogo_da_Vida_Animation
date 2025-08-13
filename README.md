@@ -25,7 +25,7 @@ python scripts/generate_svg.py --username <github_username> --steps 120 --frame-
 - The animated SVG uses SMIL. GitHub README rendering supports this style of SVG animation.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/carlosdelfino/carlosdelfino/output/game-of-live-contribution-graph-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/carlosdelfino/carlosdelfino/output/game-of-live-contribution-graph.svg">
-  <img alt="pacman contribution graph" src="https://raw.githubusercontent.com/carlosdelfino/carlosdelfino/output/game-of-live-contribution-graph.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/arvoredosaberes/Jogo_da_Vida_Animation/output/game-of-live-contribution-graph-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/arvoredosaberes/Jogo_da_Vida_Animation/output/game-of-live-contribution-graph.svg">
+  <img alt="pacman contribution graph" src="https://raw.githubusercontent.com/arvoredosaberes/Jogo_da_Vida_Animation/output/game-of-live-contribution-graph.svg">
 </picture>
