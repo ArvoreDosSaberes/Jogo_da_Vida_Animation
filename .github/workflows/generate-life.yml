@@ -47,12 +47,73 @@ jobs:
 
       - name: Determine username
         id: who
-        run: |
-          if [ -n "${{ github.event.inputs.username }}" ]; then
-            echo "user=${{ github.event.inputs.username }}" >> $GITHUB_OUTPUT
-          else
-            echo "user=${{ github.repository_owner }}" >> $GITHUB_OUTPUT
-          fi
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const inputUsername = (context.payload && context.payload.inputs && context.payload.inputs.username) || process.env.INPUT_USERNAME || '';
+            if (inputUsername) {
+              core.info(`Using provided username: ${inputUsername}`);
+              core.setOutput('user', inputUsername);
+              return;
+            }
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const { data: user } = await github.rest.users.getByUsername({ username: owner });
+            if (user.type === 'Organization') {
+              try {
+                // 1) Try org admins (may require org-level permissions)
+                const { data: admins } = await github.request('GET /orgs/{org}/members', {
+                  org: owner,
+                  role: 'admin',
+                  headers: { 'X-GitHub-Api-Version': '2022-11-28' }
+                });
+                if (Array.isArray(admins) && admins.length) {
+                  const login = admins[0].login;
+                  core.info(`Owner is an org. Using admin (org): ${login}`);
+                  core.setOutput('user', login);
+                  return;
+                }
+              } catch (e) {
+                core.warning(`Failed to list org admins: ${e.message}`);
+              }
+
+              // 2) Try repo collaborators with admin permission
+              try {
+                const { data: collabs } = await github.rest.repos.listCollaborators({
+                  owner,
+                  repo,
+                  permission: 'admin',
+                });
+                const pick = (collabs || []).find(c => c.type === 'User' && c.login !== 'github-actions[bot]') || (collabs || [])[0];
+                if (pick && pick.login) {
+                  core.info(`Owner is an org. Using admin (repo collaborator): ${pick.login}`);
+                  core.setOutput('user', pick.login);
+                  return;
+                }
+              } catch (e) {
+                core.warning(`Failed to list repo collaborators with admin: ${e.message}`);
+              }
+
+              // 3) Try any org member as a last resort
+              try {
+                const { data: members } = await github.rest.orgs.listMembers({ org: owner });
+                if (Array.isArray(members) && members.length) {
+                  const login = members[0].login;
+                  core.info(`Owner is an org. Using member: ${login}`);
+                  core.setOutput('user', login);
+                  return;
+                }
+              } catch (e) {
+                core.warning(`Failed to list org members: ${e.message}`);
+              }
+
+              // 4) Fall back to triggering actor to ensure a real user
+              const actor = (context && (context.triggering_actor || context.actor)) || process.env.GITHUB_ACTOR || owner;
+              core.info(`Falling back to actor: ${actor}`);
+              core.setOutput('user', actor);
+            } else {
+              core.setOutput('user', owner);
+            }
 
       - name: Generate animated SVGs (light and dark)
         run: |
