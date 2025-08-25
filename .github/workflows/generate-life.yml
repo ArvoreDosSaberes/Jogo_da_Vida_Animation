@@ -20,7 +20,7 @@ on:
         required: false
         default: ""
   schedule:
-    - cron: '17 2 * * *'  # daily
+    - cron: '17 2 1 * *'  # daily
   push:
     branches: [ main, master ]
 
